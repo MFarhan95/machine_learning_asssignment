@@ -1,0 +1,84 @@
+#Setting up the Enviornment 
+```{r}
+library(knitr)
+library(caret)
+library(rpart)
+library(rpart.plot)
+library(randomForest)
+library(corrplot)
+```
+
+
+#Data URL
+```{r}
+trainingUrl <- "http://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+testingUrl  <- "http://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+```
+
+# download the datasets
+```{r}
+training <- read.csv(url(trainingUrl))
+testing  <- read.csv(url(testingUrl))
+```
+
+
+# Partitioning the data set 
+```{r}
+inTrain  <- createDataPartition(training$classe, p=0.75, list=FALSE)
+TrainSet <- training[inTrain, ]
+TestSet  <- training[-inTrain, ]
+```
+
+# Removing and NA and near zero varaince
+```{r}
+NZV <- nearZeroVar(TrainSet)
+TrainSet <- TrainSet[, -NZV]
+TestSet  <- TestSet[, -NZV]
+AllNA    <- sapply(TrainSet, function(x) mean(is.na(x))) > 0.90
+TrainSet <- TrainSet[, AllNA==FALSE]
+TestSet  <- TestSet[, AllNA==FALSE]
+TrainSet <- TrainSet[, -(1:5)]
+TestSet  <- TestSet[, -(1:5)]
+```
+
+#Random Forest Method
+
+```{r}
+set.seed(12345)
+containedForest <- trainControl(method="cv", number=3, verboseIter=FALSE)
+modRandForest <- train(classe ~ ., data=TrainSet, method="rf",
+                          trControl=containedForest)
+modRandForest$finalModel
+
+```
+##predicting testing data set
+```{r}
+predictRandForest <- predict(modRandForest, newdata=TestSet)
+confMatRandForest <- confusionMatrix(factor(predictRandForest), factor(TestSet$classe))
+confMatRandForest
+```
+## plotting results
+```{r}
+plot(confMatRandForest$table, col = confMatRandForest$byClass, 
+     main = paste("Random Forest - Accuracy =",
+                  round(confMatRandForest$overall['Accuracy'], 4)))
+```
+#General Boosting MOdel
+```{r}
+set.seed(111)
+library(gbm)
+controlledGBModel <- trainControl(method = "repeatedcv", number = 5, repeats = 1)
+modGBM  <- train(classe ~ ., data=TrainSet, method = "gbm",
+                    trControl = controlledGBModel, verbose = FALSE)
+modGBM$finalModel
+predictGBM <- predict(modGBM, newdata=TestSet)
+confMatGBModel <- confusionMatrix(factor(predictGBM), factor(TestSet$classe))
+confMatGBModel
+plot(confMatGBModel$table, col = confMatGBModel$byClass, 
+     main = paste("GBM - Accuracy =", round(confMatGBModel$overall['Accuracy'], 4)))
+```
+##Random Forest : 0.998 GBM : 0.9904 In that case, the Random Forest model will be applied to predict the quiz.
+```{r}
+predictTEST <- predict(modRandForest, newdata=testing)
+predictTEST
+```
